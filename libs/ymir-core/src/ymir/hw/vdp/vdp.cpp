@@ -1,5 +1,7 @@
 #include <ymir/hw/vdp/vdp.hpp>
 
+#include <ymir/hw/vdp/vdp1_profiler.hpp>
+
 #include <ymir/util/bit_ops.hpp>
 #include <ymir/util/dev_log.hpp>
 
@@ -273,6 +275,8 @@ void VDP::Advance(uint64 cycles) {
         // - high-speed shrink, end codes, user clipping (all of these reduce costs)
         cycles <<= m_VDP1CyclesShift;
 
+        YMIR_VDP1PROF(CountGrantedCycles(cycles));
+
         // Apply timing penalty
         if (m_VDP1TimingPenaltyCycles > 0) {
             if (cycles <= m_VDP1TimingPenaltyCycles) {
@@ -399,6 +403,11 @@ FORCE_INLINE void VDP::VDP1WriteReg(uint32 address, uint16 value) {
                 break;
             case 0x0C: // ENDR
                 // TODO: schedule drawing termination after 30 cycles
+                if (m_VDP1CtlState.drawing) {
+                    // Forced termination: the command list did not run to completion.
+                    YMIR_VDP1PROF(EndFrame(m_state.regs2.VCNT, /*completed=*/false,
+                                           m_VDP1CtlState.spilloverCycles, m_VDP1TimingPenaltyCycles));
+                }
                 m_VDP1CtlState.drawing = false;
                 m_VDP1TimingPenaltyCycles = 0;
                 break;
@@ -989,6 +998,9 @@ void VDP::VDP1BeginFrame() {
     if (valid) {
         m_renderer->VDP1BeginFrame();
 
+        YMIR_VDP1PROF(BeginFrame(m_state.regs2.VCNT, static_cast<uint32>(m_VDP1CyclesShift),
+                                 m_config.video.threadedVDP1.Get()));
+
         m_VDP1CtlState.drawing = true;
         m_VDP1CtlState.lastJumpAddress = 0xFFFFFFFF;
         m_VDP1CtlState.loopCount = 0;
@@ -1000,6 +1012,9 @@ void VDP::VDP1BeginFrame() {
 
 void VDP::VDP1EndFrame() {
     devlog::trace<grp::vdp1>("End VDP1 frame on framebuffer {}", m_state.displayFB ^ 1);
+
+    YMIR_VDP1PROF(EndFrame(m_state.regs2.VCNT, /*completed=*/true, m_VDP1CtlState.spilloverCycles,
+                           m_VDP1TimingPenaltyCycles));
 
     m_VDP1CtlState.drawing = false;
     m_VDP1TimingPenaltyCycles = 0;
@@ -1025,6 +1040,9 @@ uint64 VDP::VDP1ProcessCommand() {
     const VDP1Command::Control control{.u16 = VDP1ReadVRAM<uint16>(cmdAddress)};
     m_state.regs1.currCommandAddress = cmdAddress;
 
+    YMIR_VDP1PROF(CountCommand());
+    YMIR_VDP1PROF(CountCycles(cycles));
+
     devlog::trace<grp::vdp1_cmd>("Processing command {:04X} @ {:05X}", control.u16, cmdAddress);
     if (control.end) [[unlikely]] {
         devlog::trace<grp::vdp1_cmd>("End of command list");
@@ -1032,10 +1050,15 @@ uint64 VDP::VDP1ProcessCommand() {
     } else if (!control.skip) {
         if (!control.IsValid()) [[unlikely]] {
             devlog::debug<grp::vdp1_cmd>("Invalid command {:X}", static_cast<uint16>(control.command));
+            YMIR_VDP1PROF(CountInvalidCommand());
             return cycles;
         }
         m_renderer->VDP1ExecuteCommand(cmdAddress, control);
-        cycles += VDP1CalcCommandTiming(cmdAddress, control);
+        const uint64 drawCycles = VDP1CalcCommandTiming(cmdAddress, control);
+        YMIR_VDP1PROF(CountCycles(drawCycles));
+        cycles += drawCycles;
+    } else {
+        YMIR_VDP1PROF(CountSkippedCommand());
     }
 
     // Go to the next command
@@ -1116,6 +1139,9 @@ FORCE_INLINE uint64 VDP::VDP1CalcCommandTiming(uint32 cmdAddress, VDP1Command::C
             const CoordS32 coordL = quad.LeftEdge().Coord();
             const CoordS32 coordR = quad.RightEdge().Coord();
             quadCycles += lineTiming(coordL, coordR);
+            // NOTE: unlike the rasterizer, this loop has no clipping early-out. Comparing this count
+            // against the rasterizer's tells you how many scanlines are charged but never drawn.
+            YMIR_VDP1PROF(CountEstQuadLine());
         }
         return quadCycles;
     };
@@ -1222,6 +1248,26 @@ FORCE_INLINE uint64 VDP::VDP1CalcCommandTiming(uint32 cmdAddress, VDP1Command::C
 
     default: break;
     }
+
+#if Ymir_ENABLE_VDP1_PROFILING
+    {
+        using enum VDP1Command::CommandType;
+        using prof::CmdBucket;
+        CmdBucket bucket;
+        switch (control.command) {
+        case DrawNormalSprite: bucket = CmdBucket::NormalSprite; break;
+        case DrawScaledSprite: bucket = CmdBucket::ScaledSprite; break;
+        case DrawDistortedSprite: [[fallthrough]];
+        case DrawDistortedSpriteAlt: bucket = CmdBucket::DistortedSprite; break;
+        case DrawPolygon: bucket = CmdBucket::Polygon; break;
+        case DrawPolylines: [[fallthrough]];
+        case DrawPolylinesAlt: bucket = CmdBucket::Polylines; break;
+        case DrawLine: bucket = CmdBucket::Line; break;
+        default: bucket = CmdBucket::NonDrawing; break;
+        }
+        prof::g_vdp1.CountDrawCommand(bucket, cycles);
+    }
+#endif
 
     return cycles;
 }

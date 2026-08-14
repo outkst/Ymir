@@ -1,5 +1,7 @@
 #include <ymir/hw/vdp/renderer/vdp_renderer_sw.hpp>
 
+#include <ymir/hw/vdp/vdp1_profiler.hpp>
+
 #include <ymir/util/constexpr_for.hpp>
 #include <ymir/util/dev_log.hpp>
 #include <ymir/util/inline.hpp>
@@ -1060,11 +1062,14 @@ FORCE_INLINE bool SoftwareVDPRenderer::VDP1PlotPixel(CoordS32 coord, const VDP1P
 
     // Reject pixels outside of clipping area
     if (VDP1IsPixelClipped<deinterlace>(coord, pixelParams.mode.userClippingEnable, pixelParams.mode.clippingMode)) {
+        // The cost model charges for this pixel; the hardware never writes it.
+        YMIR_VDP1PROF(CountPixelClipped());
         return false;
     }
 
     if constexpr (!transparentMeshes) {
         if (pixelParams.mode.meshEnable && ((x ^ y) & 1)) {
+            YMIR_VDP1PROF(CountPixelMeshed());
             return true;
         }
     }
@@ -1072,6 +1077,7 @@ FORCE_INLINE bool SoftwareVDPRenderer::VDP1PlotPixel(CoordS32 coord, const VDP1P
     const bool altFB = deinterlace && doubleDensity && (y & 1);
     if (doubleDensity) {
         if (!deinterlace && regs1.dblInterlaceEnable && (y & 1) != regs1.dblInterlaceDrawLine) {
+            YMIR_VDP1PROF(CountPixelMeshed());
             return true;
         }
     }
@@ -1092,8 +1098,15 @@ FORCE_INLINE bool SoftwareVDPRenderer::VDP1PlotPixel(CoordS32 coord, const VDP1P
     if (pixelParams.mode.msbOn) {
         // TODO: check correctness -- does it write only when (x&1)==0 or is it force-aligned like this?
         drawFB[fbOffset & ~1u] |= 0x80;
+        // Read-modify-write of the framebuffer.
+        YMIR_VDP1PROF(CountPixelPlotted(/*blended=*/true));
         return true;
     }
+
+    // Counted here rather than at each write site below: past this point the pixel is always written.
+    // `blended` marks the cases that require a framebuffer *read* as well as a write, which is a
+    // materially more expensive operation on hardware and is not distinguished by the current cost model.
+    YMIR_VDP1PROF(CountPixelPlotted(/*blended=*/!regs1.pixel8Bits && pixelParams.mode.colorCalcBits != 0));
 
     if (regs1.pixel8Bits) {
         // TODO: what happens if pixelParams.mode.colorCalcBits/gouraudEnable != 0?
@@ -1263,6 +1276,9 @@ FORCE_INLINE bool SoftwareVDPRenderer::VDP1PlotTexturedLine(CoordS32 coord1, Coo
     auto readTexel = [&] {
         const uint32 u = uStepper.Value();
 
+        // VRAM texel read. High-speed shrink halves how often this runs; the cost model ignores that.
+        YMIR_VDP1PROF(CountTexelFetch());
+
         const uint32 charIndex = u + v * charSizeH;
 
         auto processEndCode = [&](bool endCode) {
@@ -1338,6 +1354,9 @@ FORCE_INLINE bool SoftwareVDPRenderer::VDP1PlotTexturedLine(CoordS32 coord1, Coo
         uStepper.StepPixel();
 
         if (hasEndCode || (transparent && !mode.transparentPixelDisable)) {
+            // Pixel is skipped due to an end code or a transparent texel. The cost model charges for it.
+            YMIR_VDP1PROF(CountPixelTransparent());
+
             if (mode.gouraudEnable) {
                 pixelParams.gouraud.Step();
             }
@@ -1497,6 +1516,10 @@ FORCE_INLINE void SoftwareVDPRenderer::VDP1PlotTexturedQuad(uint32 cmdAddress, V
 
     // Interpolate linearly over edges A-D and B-C
     for (; quad.CanStep(); quad.Step()) {
+        // Compare against the estimator's quad line count: this loop breaks early once the quad leaves
+        // the clipping area, the estimator's equivalent loop does not.
+        YMIR_VDP1PROF(CountRasterQuadLine());
+
         // Plot lines between the interpolated points
         const CoordS32 coordL = quad.LeftEdge().Coord();
         const CoordS32 coordR = quad.RightEdge().Coord();
@@ -1807,6 +1830,8 @@ void SoftwareVDPRenderer::VDP1Cmd_DrawPolygon(uint32 cmdAddress) {
 
     // Interpolate linearly over edges A-D and B-C
     for (; quad.CanStep(); quad.Step()) {
+        YMIR_VDP1PROF(CountRasterQuadLine());
+
         // Plot lines between the interpolated points
         const CoordS32 coordL = quad.LeftEdge().Coord();
         const CoordS32 coordR = quad.RightEdge().Coord();

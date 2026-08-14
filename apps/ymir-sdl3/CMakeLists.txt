@@ -361,6 +361,8 @@ add_executable(ymir-sdl3
     src/app/ui/windows/debug/vdp_window_base.cpp
     src/app/ui/windows/debug/vdp_window_base.hpp
     src/app/ui/windows/debug/vdp_window_set.hpp
+    src/app/ui/windows/debug/vdp1_profiler_window.cpp
+    src/app/ui/windows/debug/vdp1_profiler_window.hpp
     src/app/ui/windows/debug/vdp1_registers_window.cpp
     src/app/ui/windows/debug/vdp1_registers_window.hpp
     src/app/ui/windows/debug/vdp2_bg_layer_params_window.cpp

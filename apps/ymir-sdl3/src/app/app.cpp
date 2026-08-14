@@ -901,8 +901,7 @@ void App::RunEmulator() {
 
             // Rebuild the tile only when a parameter changes or the GPU texture was recreated (device reset).
             if (scanlineTile == gfx::kInvalidTextureHandle || slTileScale != tileScale || slTileGap != tileGap ||
-                slTileAlpha != alpha || slTileMask != maskId || slTileShadowMask != shadowMaskId ||
-                slTileNeedsUpload) {
+                slTileAlpha != alpha || slTileMask != maskId || slTileShadowMask != shadowMaskId || slTileNeedsUpload) {
                 const auto mask = videoSettings.scanlineMask;
                 const bool drawH =
                     mask == Settings::Video::ScanlineMask::Horizontal || mask == Settings::Video::ScanlineMask::Grid;
@@ -2664,6 +2663,10 @@ void App::RunEmulator() {
                         ImGui::TextUnformatted("VDP1");
                         ImGui::EndDisabled();
                         ImGui::MenuItem("Registers", nullptr, &m_windowManagerService.VDPWindowSet().vdp1Regs.Open);
+#if Ymir_ENABLE_VDP1_PROFILING
+                        ImGui::MenuItem("Cost model profiler", nullptr,
+                                        &m_windowManagerService.VDPWindowSet().vdp1Profiler.Open);
+#endif
 
                         ImGui::Separator();
                         ImGui::BeginDisabled();

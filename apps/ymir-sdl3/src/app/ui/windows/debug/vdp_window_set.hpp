@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vdp1_profiler_window.hpp"
 #include "vdp1_registers_window.hpp"
 #include "vdp2_bg_layer_params_window.hpp"
 #include "vdp2_color_calc_params_window.hpp"
@@ -22,10 +23,18 @@ struct VDPWindowSet {
         , vdp2WindowParams(context)
         , vdp2DebugOverlay(context)
         , vdp2VRAMAccessPatterns(context)
-        , vdp2CRAM(context) {}
+        , vdp2CRAM(context)
+#if Ymir_ENABLE_VDP1_PROFILING
+        , vdp1Profiler(context)
+#endif
+    {
+    }
 
     void DisplayAll() {
         vdp1Regs.Display();
+#if Ymir_ENABLE_VDP1_PROFILING
+        vdp1Profiler.Display();
+#endif
         vdp2LayerVisibility.Display();
         vdp2BGLayerParams.Display();
         vdp2SpriteLayerParams.Display();
@@ -45,6 +54,9 @@ struct VDPWindowSet {
     VDP2DebugOverlayWindow vdp2DebugOverlay;
     VDP2VRAMAccessPatternsWindow vdp2VRAMAccessPatterns;
     VDP2CRAMWindow vdp2CRAM;
+#if Ymir_ENABLE_VDP1_PROFILING
+    VDP1ProfilerWindow vdp1Profiler;
+#endif
 };
 
 } // namespace app::ui

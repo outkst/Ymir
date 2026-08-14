@@ -131,6 +131,7 @@ add_library(ymir-core
     include/ymir/hw/vdp/vdp_internal_callbacks.hpp
     include/ymir/hw/vdp/vdp_state.hpp
     include/ymir/hw/vdp/vdp1_defs.hpp
+    include/ymir/hw/vdp/vdp1_profiler.hpp
     include/ymir/hw/vdp/vdp1_regs.hpp
     include/ymir/hw/vdp/vdp2_defs.hpp
     include/ymir/hw/vdp/vdp2_regs.hpp
@@ -444,6 +445,7 @@ target_compile_definitions(ymir-core PUBLIC "Ymir_ENABLE_DEVLOG=$<BOOL:${Ymir_EN
 target_compile_definitions(ymir-core PUBLIC "Ymir_DEV_ASSERTIONS=$<BOOL:${Ymir_ENABLE_DEV_ASSERTIONS}>")
 target_compile_definitions(ymir-core PUBLIC "Ymir_DEV_BUILD=$<BOOL:${Ymir_DEV_BUILD}>")
 target_compile_definitions(ymir-core PUBLIC "Ymir_EXTRA_INLINING=$<BOOL:${Ymir_EXTRA_INLINING}>")
+target_compile_definitions(ymir-core PUBLIC "Ymir_ENABLE_VDP1_PROFILING=$<BOOL:${Ymir_ENABLE_VDP1_PROFILING}>")
 target_compile_definitions(ymir-core PUBLIC "TOML_EXCEPTIONS=0")
 
 ## Define feature flags macros

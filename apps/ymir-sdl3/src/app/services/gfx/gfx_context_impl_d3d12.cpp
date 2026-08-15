@@ -14,6 +14,8 @@
 
 #include <ymir/gpu/shaders/gpu_shaders.hpp>
 
+#include <ymir/util/string.hpp>
+
 #include <backends/imgui_impl_dx12.h>
 #include <backends/imgui_impl_sdl3.h>
 
@@ -33,20 +35,6 @@ using namespace ymir::gpu;
 using namespace ymir::gpu::d3d12;
 
 namespace app::gfx {
-
-/// @brief Converts the given UTF-8-encoded string to a wide string.
-/// @param[in] str the string to convert
-/// @return the string converted to `std::wstring`
-static std::wstring StringToWString(std::string_view str) {
-    if (str.empty()) {
-        return L"";
-    }
-
-    const int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-    std::wstring wstr(size, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size);
-    return wstr;
-}
 
 static DXGI_FORMAT ToD3D12Value(PixelFormat format) {
     switch (format) {
@@ -265,7 +253,7 @@ struct Direct3D12GraphicsContext::Impl {
             dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
         }
 
-        if (FAILED(device.Create(nullptr, spec.featureLevel))) {
+        if (FAILED(device.Create(spec.adapter, spec.featureLevel))) {
             return util::ErrorMessage{"Failed to create device"};
         }
         debugLayer.BreakOnWarnings(device.GetPointer(), true);
@@ -978,7 +966,7 @@ struct Direct3D12GraphicsContext::Impl {
                 return util::ErrorMessage{fmt::format("Could not create texture, error code {:X}", (uint32)hr)};
             }
             if (!spec.name.empty()) {
-                texture.resource->SetName(fmt::format(L"{} texture", StringToWString(spec.name)).c_str());
+                texture.resource->SetName(fmt::format(L"{} texture", util::StringToWString(spec.name)).c_str());
             }
         }
 
@@ -1007,7 +995,7 @@ struct Direct3D12GraphicsContext::Impl {
                     fmt::format("Could not map texture staging buffer #{}, error code {:X}", i, (uint32)hr)};
             }
             if (!spec.name.empty()) {
-                buffer->SetName(fmt::format(L"{} staging buffer #{}", StringToWString(spec.name), i).c_str());
+                buffer->SetName(fmt::format(L"{} staging buffer #{}", util::StringToWString(spec.name), i).c_str());
             }
         }
 
@@ -1274,7 +1262,7 @@ struct Direct3D12GraphicsContext::Impl {
                 "Failed to create texture root signature for render target [{}], error code {:X}", name, (uint32)hr)};
         }
         pipeline.rootSignature->SetName(
-            StringToWString(fmt::format("[Ymir-GCtx] Root signature for render target [{}]", name)).c_str());
+            util::StringToWString(fmt::format("[Ymir-GCtx] Root signature for render target [{}]", name)).c_str());
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
         psoDesc.InputLayout = {inputElementDescs, std::size(inputElementDescs)};
@@ -1329,8 +1317,8 @@ struct Direct3D12GraphicsContext::Impl {
             return util::ErrorMessage{std::move(message)};
         }
         pipeline.pipelineState->SetName(
-            StringToWString(fmt::format("[Ymir-GCtx] Graphics pipeline for render target [{}]{}", name,
-                                        blendEnabled ? " (blend)" : ""))
+            util::StringToWString(fmt::format("[Ymir-GCtx] Graphics pipeline for render target [{}]{}", name,
+                                              blendEnabled ? " (blend)" : ""))
                 .c_str());
 
         return &pipeline;

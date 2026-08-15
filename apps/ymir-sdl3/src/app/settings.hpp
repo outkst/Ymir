@@ -492,6 +492,7 @@ struct Settings {
         enum class ScanlineMask { Horizontal, Vertical, Grid };
 
         gfx::Backend graphicsBackend;
+        std::optional<gfx::AdapterID> graphicsAdapter;
 
         bool forceIntegerScaling;
         bool forceAspectRatio;

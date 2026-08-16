@@ -21,6 +21,8 @@
 
 #include <d3d12.h>
 
+#include <wil/com.h>
+
 #include <fmt/format.h>
 
 #include <cmrc/cmrc.hpp>
@@ -80,12 +82,6 @@ struct alignas(uint32) DrawTextureConstants {
     Float2 renderTargetSize;
     Float2 rotPivot;
     float rotAngle;
-};
-
-struct Descriptor {
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
-    UINT index;
 };
 
 // -----------------------------------------------------------------------------
@@ -304,7 +300,7 @@ struct Direct3D12GraphicsContext::Impl {
         // Create descriptor heaps
         {
             D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc{};
-            rtvHeapDesc.NumDescriptors = 131072;
+            rtvHeapDesc.NumDescriptors = 256;
             rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
             rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
             if (FAILED(rtvHeap.Create(device, rtvHeapDesc))) {
@@ -314,7 +310,7 @@ struct Direct3D12GraphicsContext::Impl {
             rtvHeapAlloc.Bind(rtvHeap);
 
             D3D12_DESCRIPTOR_HEAP_DESC resourceHeapDesc{};
-            resourceHeapDesc.NumDescriptors = 131072;
+            resourceHeapDesc.NumDescriptors = 256;
             resourceHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             resourceHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             if (FAILED(resourceHeap.Create(device, resourceHeapDesc))) {
@@ -874,7 +870,7 @@ struct Direct3D12GraphicsContext::Impl {
         return {};
     }
 
-    util::VoidResult<> Present() {
+    util::ValueResult<PresentResult> Present() {
         if (auto result = EndFrame(); !result) {
             return util::ErrorMessage{fmt::format("Could not end frame: {}", result.Error().message)};
         }
@@ -890,14 +886,15 @@ struct Direct3D12GraphicsContext::Impl {
         // involves destroying and recreating the entire swap chain, which doesn't seem to be worth the effort. Instead,
         // we'll treat VSync and Mailbox as the same mode.
 
+        HRESULT hr;
         switch (presentMode) {
         default: [[fallthrough]];
-        case PresentMode::VSync: swapchain->Present(1, 0); break;
-        case PresentMode::Mailbox: swapchain->Present(1, 0); break;
+        case PresentMode::VSync: hr = swapchain->Present(1, 0); break;
+        case PresentMode::Mailbox: hr = swapchain->Present(1, 0); break;
         case PresentMode::Adaptive:
-            swapchain->Present(0, swapchain.IsTearingSupported() ? DXGI_PRESENT_ALLOW_TEARING : 0);
+            hr = swapchain->Present(0, swapchain.IsTearingSupported() ? DXGI_PRESENT_ALLOW_TEARING : 0);
             break;
-        case PresentMode::NoSync: swapchain->Present(0, 0); break;
+        case PresentMode::NoSync: hr = swapchain->Present(0, 0); break;
         }
 
         if (auto result = MoveToNextFrame(); !result) {
@@ -906,7 +903,14 @@ struct Direct3D12GraphicsContext::Impl {
         if (auto result = BeginFrame(); !result) {
             return util::ErrorMessage{fmt::format("Could not begin frame: {}", result.Error().message)};
         }
-        return {};
+
+        if (hr == DXGI_STATUS_OCCLUDED) {
+            return PresentResult::Occluded;
+        }
+        if (FAILED(hr)) {
+            return util::ErrorMessage{fmt::format("Frame presentation failed, error code {:X}", (uint32)hr)};
+        }
+        return PresentResult::Ok;
     }
 
     util::VoidResult<> WaitForGPU() {
@@ -1705,11 +1709,11 @@ util::VoidResult<> Direct3D12GraphicsContext::SetPresentMode(PresentMode mode) {
     return {};
 }
 
-util::VoidResult<> Direct3D12GraphicsContext::Present() {
+util::ValueResult<PresentResult> Direct3D12GraphicsContext::Present() {
     return m_impl->Present();
 }
 
-wil::com_ptr_nothrow<ID3D12Device> Direct3D12GraphicsContext::GetDevice() const {
+ID3D12Device *Direct3D12GraphicsContext::GetDevice() const {
     return m_impl->device.GetPointer();
 }
 

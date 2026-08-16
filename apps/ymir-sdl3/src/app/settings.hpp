@@ -532,11 +532,21 @@ struct Settings {
         display::DisplayMode fullScreenMode;
         bool borderlessFullScreen;
 
+        util::Observable<bool> useHardwareAcceleration;
+
         struct SoftwareRenderer {
             util::Observable<bool> threadedVDP1;
             util::Observable<bool> threadedVDP2;
             util::Observable<bool> threadedDeinterlacer;
         } swRenderer;
+
+        struct HardwareRenderer {
+            using VDP1VRAMSyncInterval = ymir::core::config::hw_vdp::VDP1VRAMSyncInterval;
+            using VDP2VRAMSyncInterval = ymir::core::config::hw_vdp::VDP2VRAMSyncInterval;
+
+            util::Observable<VDP1VRAMSyncInterval> vdp1SyncInterval = VDP1VRAMSyncInterval::Command;
+            util::Observable<VDP2VRAMSyncInterval> vdp2SyncInterval = VDP2VRAMSyncInterval::Scanline;
+        } hwRenderer;
 
         struct Enhancements {
             util::Observable<bool> deinterlace;

@@ -316,6 +316,30 @@ FORCE_INLINE static void Parse(toml::node_view<toml::node> &node, SDL_PixelForma
     }
 }
 
+FORCE_INLINE static void Parse(toml::node_view<toml::node> &node, core::config::hw_vdp::VDP1VRAMSyncInterval &value) {
+    value = core::config::hw_vdp::VDP1VRAMSyncInterval::Command;
+    if (auto opt = node.value<std::string>()) {
+        if (*opt == "Command"s) {
+            value = core::config::hw_vdp::VDP1VRAMSyncInterval::Command;
+        } else if (*opt == "Draw"s) {
+            value = core::config::hw_vdp::VDP1VRAMSyncInterval::Draw;
+        } else if (*opt == "Swap"s) {
+            value = core::config::hw_vdp::VDP1VRAMSyncInterval::Swap;
+        }
+    }
+}
+
+FORCE_INLINE static void Parse(toml::node_view<toml::node> &node, core::config::hw_vdp::VDP2VRAMSyncInterval &value) {
+    value = core::config::hw_vdp::VDP2VRAMSyncInterval::Scanline;
+    if (auto opt = node.value<std::string>()) {
+        if (*opt == "Scanline"s) {
+            value = core::config::hw_vdp::VDP2VRAMSyncInterval::Scanline;
+        } else if (*opt == "Frame"s) {
+            value = core::config::hw_vdp::VDP2VRAMSyncInterval::Frame;
+        }
+    }
+}
+
 FORCE_INLINE static void Parse(toml::node_view<toml::node> &node, Settings::Audio::MidiPort::Type &value) {
     value = Settings::Audio::MidiPort::Type::None;
     if (auto opt = node.value<std::string>()) {
@@ -587,6 +611,23 @@ FORCE_INLINE static const char *ToTOML(const SDL_PixelFormat value) {
     case SDL_PIXELFORMAT_P010: return "P010";
     case SDL_PIXELFORMAT_EXTERNAL_OES: return "ExternalOES";
     case SDL_PIXELFORMAT_MJPG: return "MJPG";
+    }
+}
+
+FORCE_INLINE static const char *ToTOML(const core::config::hw_vdp::VDP1VRAMSyncInterval value) {
+    switch (value) {
+    default: [[fallthrough]];
+    case core::config::hw_vdp::VDP1VRAMSyncInterval::Command: return "Command";
+    case core::config::hw_vdp::VDP1VRAMSyncInterval::Draw: return "Draw";
+    case core::config::hw_vdp::VDP1VRAMSyncInterval::Swap: return "Swap";
+    }
+}
+
+FORCE_INLINE static const char *ToTOML(const core::config::hw_vdp::VDP2VRAMSyncInterval value) {
+    switch (value) {
+    default: [[fallthrough]];
+    case core::config::hw_vdp::VDP2VRAMSyncInterval::Scanline: return "Scanline";
+    case core::config::hw_vdp::VDP2VRAMSyncInterval::Frame: return "Frame";
     }
 }
 
@@ -1115,9 +1156,12 @@ void Settings::ResetToDefaults() {
     video.fullScreenMode.pixelFormat = SDL_PIXELFORMAT_UNKNOWN;
     video.fullScreenMode.refreshRate = 0.0f;
     video.fullScreenMode.pixelDensity = 0.0f;
+    video.useHardwareAcceleration = false;
     video.swRenderer.threadedVDP1 = true;
     video.swRenderer.threadedVDP2 = true;
     video.swRenderer.threadedDeinterlacer = true;
+    video.hwRenderer.vdp1SyncInterval = core::config::hw_vdp::VDP1VRAMSyncInterval::Command;
+    video.hwRenderer.vdp2SyncInterval = core::config::hw_vdp::VDP2VRAMSyncInterval::Scanline;
     video.enhancements.deinterlace = false;
     video.enhancements.transparentMeshes = false;
 
@@ -1158,9 +1202,12 @@ void Settings::BindConfiguration(ymir::core::Configuration &config) {
     system.rtc.virtHardResetStrategy.Observe([&](auto value) { config.rtc.virtHardResetStrategy = value; });
     system.rtc.virtHardResetTimestamp.Observe([&](auto value) { config.rtc.virtHardResetTimestamp = value; });
 
-    video.swRenderer.threadedVDP1.Observe([&](auto value) { config.video.threadedVDP1 = value; });
-    video.swRenderer.threadedVDP2.Observe([&](auto value) { config.video.threadedVDP2 = value; });
-    video.swRenderer.threadedDeinterlacer.Observe([&](auto value) { config.video.threadedDeinterlacer = value; });
+    video.swRenderer.threadedVDP1.Observe([&](auto value) { config.swRenderer.threadedVDP1 = value; });
+    video.swRenderer.threadedVDP2.Observe([&](auto value) { config.swRenderer.threadedVDP2 = value; });
+    video.swRenderer.threadedDeinterlacer.Observe([&](auto value) { config.swRenderer.threadedDeinterlacer = value; });
+
+    video.hwRenderer.vdp1SyncInterval.Observe(config.hwRenderer.vdp1SyncInterval);
+    video.hwRenderer.vdp2SyncInterval.Observe(config.hwRenderer.vdp2SyncInterval);
 
     audio.interpolation.Observe([&](auto value) { config.audio.interpolation = value; });
     audio.threadedSCSP.Observe([&](auto value) { config.audio.threadedSCSP = value; });
@@ -1635,6 +1682,11 @@ SettingsLoadResult Settings::Load(const std::filesystem::path &path) {
                 Parse(tblSwRenderer, "ThreadedVDP2", video.swRenderer.threadedVDP2);
                 Parse(tblSwRenderer, "ThreadedDeinterlacer", video.swRenderer.threadedDeinterlacer);
             }
+            if (auto tblHwRenderer = tblVideo["HardwareRenderer"]) {
+                Parse(tblHwRenderer, "VDP1SyncInterval", video.hwRenderer.vdp1SyncInterval);
+                Parse(tblHwRenderer, "VDP2SyncInterval", video.hwRenderer.vdp2SyncInterval);
+            }
+            Parse(tblVideo, "UseHardwareAcceleration", video.useHardwareAcceleration);
         } else {
             if (configVersion >= 4) {
                 Parse(tblVideo, "ThreadedVDP1", video.swRenderer.threadedVDP1);
@@ -2076,6 +2128,11 @@ SettingsSaveResult Settings::Save() {
                 {"ThreadedVDP2", video.swRenderer.threadedVDP2.Get()},
                 {"ThreadedDeinterlacer", video.swRenderer.threadedDeinterlacer.Get()},
             }}},
+            {"HardwareRenderer", toml::table{{
+                {"VDP1SyncInterval", ToTOML(video.hwRenderer.vdp1SyncInterval.Get())},
+                {"VDP2SyncInterval", ToTOML(video.hwRenderer.vdp2SyncInterval.Get())},
+            }}},
+            {"UseHardwareAcceleration", video.useHardwareAcceleration.Get()},
             {"Enhancements", toml::table{{
                 {"Deinterlace", video.enhancements.deinterlace.Get()},
                 {"TransparentMeshes", video.enhancements.transparentMeshes.Get()},

@@ -44,15 +44,6 @@ void VideoSettingsView::Display() {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    ImGui::PushFont(m_context.fonts.sansSerif.bold, m_context.fontSizes.medium);
-    ImGui::SeparatorText("Hardware renderer");
-    ImGui::PopFont();
-
-    widgets::settings::video::hwrenderer::VDP1VRAMSyncInterval(m_context);
-    widgets::settings::video::hwrenderer::VDP2VRAMSyncInterval(m_context);
-
-    // -----------------------------------------------------------------------------------------------------------------
-
     ImGui::PushFont(m_context.fonts.sansSerif.bold, m_context.fontSizes.large);
     ImGui::SeparatorText("Enhancements");
     ImGui::PopFont();

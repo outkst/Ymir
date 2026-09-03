@@ -107,9 +107,8 @@ You might also have to install additional packages:
 - `python3 python3-venv` for dbus
 
 Vulkan is an optional dependency which enables GPU-accelerated VDP1/VDP2 rendering. For that reason, it is highly recommended to install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home).
-If compiled with support for Vulkan, your system must also provide `dxc` or `glslc` (shaderc's CLI tool) to allow Ymir to compile shaders offline. Both tools are usually included with the SDK.
-DXC is preferred over shaderc due to better support for more modern features.
-You can opt to install the Vulkan dependencies from your system's package manager instead of the SDK. For example, on Ubuntu: `libvulkan-dev vulkan-tools vulkan-validationlayers spirv-tools glslc glslang-tools`.
+If Vulkan is enabled, you will also need `dxc` to allow Ymir to compile shaders offline. DXC is usually included with the SDK. shaderc (`glslc`) is not supported due to usage of modern HLSL features in some shaders (e.g. 64-bit integers).
+You can opt to install the Vulkan dependencies from your system's package manager instead of the SDK. For example, on Ubuntu: `libvulkan-dev vulkan-tools vulkan-validationlayers spirv-tools-dev glslc glslang-tools`.
 
 The compiler of choice for this platform is Clang. GCC is also supported, but produces slightly slower code.
 
@@ -376,7 +375,7 @@ It is recommended to keep your vendored dependencies in a subdirectory of your r
 `third_party`. Inside it, run these commands:
 
 ```sh
-git submodule add https://github.com/StrikerX3/Ymir.git
+git submodule add https://github.com/ymir-emu/Ymir.git
 git submodule update --init --recursive
 ```
 
@@ -402,7 +401,7 @@ include(FetchContent)
 
 FetchContent_Declare(
     ymir
-    GIT_REPOSITORY https://github.com/StrikerX3/Ymir
+    GIT_REPOSITORY https://github.com/ymir-emu/Ymir
     GIT_TAG        v0.3.2   # ideally, a specific tag or commit, but `main` also works
 )
 

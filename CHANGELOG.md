@@ -22,10 +22,10 @@ Introduces save state file version 14.
 - Debugger: Added RBG0 and RBG1 line color single stack views to the VDP2 debug overlay.
 - Debugger: Added basic VDP2 registers view.
 - Graphics: New graphics backend, adding support for native graphics APIs:
-    - Direct3D 11 and 12 on Windows
-    - Vulkan on Windows, Linux and macOS
-    - Metal on macOS
-    - SDL Renderer wherever it's supported
+    - Direct3D 11 and 12 on Windows (@StrikerX3)
+    - Vulkan on Windows and Linux (TBD)
+    - Metal on macOS (#929; @SternXD)
+    - SDL Renderer wherever it's supported (@StrikerX3)
 - Input: Added option to constrain mouse cursor to window in system cursor mode.
 - Input: Convert 3D Control Pad analog stick to D-Pad inputs when in digital mode.
 - Input: Graduate Virtua Gun to stable feature.
@@ -41,7 +41,10 @@ Introduces save state file version 14.
 
 ### Fixes
 
+- App: Don't persist window geometry in full screen mode.
+- App: Reset window geometry if it matches the bounds of a display.
 - Backup RAM: Fix crash when attempting to load a backup RAM cartridge with the default path.
+- Backup RAM: Remove strict language check when importing files. Fixes importing save files from Kronos's backup RAM cartridges. (#942)
 - CD Block (HLE): Report current CD status and raise CMOK HIRQ signal when processing unimplemented commands.
 - CD Block (HLE): Read reset position flag correctly from parameters.
 - CD Block (LLE): Fix audio track playback failing for tracks 16 and higher. Fixes Virtual On - Cyber Troopers credits and the songs in certain arenas.
@@ -577,7 +580,7 @@ Introduced save state file version 8.
 - App: Show actual VDP1 frame rate separated from VDP1 draw calls.
 - Build: FreeBSD support for x86-64 systems. (#389; @bsdcode)
 - Build: macOS builds are now universal -- one binary supports both Intel and Apple Silicon Macs. (#351; @Wunkolo)
-- Build: Nightly builds are now available [here](https://github.com/StrikerX3/Ymir/releases/latest-nightly).
+- Build: Nightly builds are now available [here](https://github.com/ymir-emu/Ymir/releases/latest-nightly).
 - Core: Improve manual reset event performance by using OS-specific implementations based on [cppcoro](https://github.com/lewissbaker/cppcoro).
 - Debugger: Added CD Block filters view.
 - Debugger: Added rudimentary SH-2 breakpoint management and per-game debugger state persistence. (#22)

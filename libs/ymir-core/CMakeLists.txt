@@ -221,6 +221,7 @@ add_library(ymir-core
     include/ymir/util/date_time.hpp
     include/ymir/util/dev_assert.hpp
     include/ymir/util/dev_log.hpp
+    include/ymir/util/dirty_bitmap.hpp
     include/ymir/util/event.hpp
     include/ymir/util/function_info.hpp
     include/ymir/util/hashing.hpp
@@ -395,7 +396,9 @@ set(SHADER_INPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/res/shaders")
 set(SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 
 set(COMPUTE_SHADER_SOURCES
-    res/shaders/src/vdp/vdp2_render_bgs_cs.hlsl
+    res/shaders/src/vdp/cs_vdp2_compose.hlsl
+    res/shaders/src/vdp/cs_vdp2_render_bgs.hlsl
+    res/shaders/src/vdp/cs_vdp2_render_sprite.hlsl
 )
 ## TODO: add per-platform shader code if needed
 # if (WIN32)
@@ -419,6 +422,18 @@ foreach (SHADER_SRC ${COMPUTE_SHADER_SOURCES})
     )
     list(APPEND COMPILED_SHADERS ${SHADER_BINARY_FILES})
 endforeach ()
+
+# Configure properties for shader source files in Visual Studio solutions
+if (WIN32)
+    set_source_files_properties(
+        ${COMPUTE_SHADER_SOURCES}
+        PROPERTIES
+            VS_SHADER_TYPE "Compute"
+            VS_SHADER_MODEL "6.0"
+            VS_SHADER_ENTRYPOINT "CSMain"
+    )
+endif ()
+
 
 ## Create the embedded shaders target
 MESSAGE(STATUS "Generating core shader resource library: ${COMPILED_SHADERS}")
@@ -526,6 +541,20 @@ if (WIN32)
 
         WIL::WIL
     )
+elseif (APPLE)
+    find_package(Iconv REQUIRED)
+    target_link_libraries(ymir-core PUBLIC
+        Iconv::Iconv
+    )
+elseif (UNIX) # Linux and FreeBSD
+    find_package(Iconv REQUIRED)
+    target_link_libraries(ymir-core PUBLIC
+        Iconv::Iconv
+    )
+    if (CMAKE_SYSTEM_NAME MATCHES FreeBSD)
+        # Prevent third-party package libiconv from interfering with iconv from libc.
+        target_compile_definitions(ymir-core PUBLIC "LIBICONV_PLUG")
+    endif ()
 endif ()
 
 if (Vulkan_FOUND)

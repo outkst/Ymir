@@ -31,7 +31,7 @@ public:
     void ReceiveSample(sint16 left, sint16 right);
 
     void Snapshot(std::span<Sample, 2048> out) const {
-        const uint32 readPos = m_readPos;
+        const uint32 readPos = m_readPos.load(std::memory_order_relaxed);
         std::copy(m_buffer.begin() + readPos, m_buffer.end(), out.begin());
         std::copy(m_buffer.begin(), m_buffer.begin() + readPos, out.begin() + out.size() - readPos);
     }
@@ -56,6 +56,9 @@ public:
 
     void SetSync(bool sync) {
         m_sync = sync;
+        if (!sync) {
+            m_bufferNotFullEvent.Set();
+        }
         // Audio sync is disabled exactly when the emulator runs faster than realtime (fast-forward / turbo). Track
         // that state so the output volume can be scaled while fast-forwarding. Normal and slow-motion speeds keep
         // sync and play back at the regular volume.
@@ -90,11 +93,9 @@ public:
     }
 
     uint32 GetBufferCount() const {
-        uint32 total = m_writePos - m_readPos + m_buffer.size();
-        if (total > m_buffer.size()) {
-            total -= m_buffer.size();
-        }
-        return total;
+        const uint32 readPos = m_readPos.load(std::memory_order_relaxed);
+        const uint32 writePos = m_writePos.load(std::memory_order_relaxed);
+        return (writePos >= readPos) ? (writePos - readPos) : (m_buffer.size() - (readPos - writePos));
     }
 
     uint32 GetBufferCapacity() const {
@@ -107,11 +108,11 @@ private:
 
     std::array<Sample, 2048> m_buffer{};
     std::atomic_uint32_t m_readPos = 0;
-    uint32 m_writePos = 0;
+    std::atomic_uint32_t m_writePos = 0;
     util::Event m_bufferNotFullEvent{true};
 
     std::atomic_bool m_sync = true;
-    bool m_silent = false;
+    std::atomic_bool m_silent = false;
 
     // Gain state read by UpdateGain(). The setters run on the UI thread while SetSync() is driven from the emulator
     // thread, so every field UpdateGain() touches is atomic to avoid a data race on the computed stream gain.
